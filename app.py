@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 from mem0 import MemoryClient
 
@@ -38,13 +39,17 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
     if isinstance(memories, list) and len(memories) > 0:
         memory_context = "\n".join([f"- {m.get('memory', '')}" for m in memories if isinstance(m, dict)])
 
-    # 2. Add memories to system context and generate response
+    # 2. Build system instruction configuration using types.GenerateContentConfig
     system_instruction = f"You are a helpful AI assistant. Relevant context about the user:\n{memory_context}"
-    
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction
+    )
+
+    # 3. Generate content using supported model ID
     response = genai_client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash",
         contents=prompt,
-        config={"system_instruction": system_instruction}
+        config=config
     )
     bot_reply = response.text
 
@@ -52,5 +57,5 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
         st.markdown(bot_reply)
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
 
-    # 3. Save new interaction to Mem0 memory
+    # 4. Save new interaction to Mem0 memory
     mem0_client.add([{"role": "user", "content": prompt}], user_id=user_id)
