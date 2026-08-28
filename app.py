@@ -37,7 +37,7 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 1. Safely fetch and parse user memories from Mem0
+    # 1. Fetch memories safely
     memory_context = ""
     try:
         response = mem0_client.get_all(filters={"user_id": user_id})
@@ -61,7 +61,7 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
     except Exception as e:
         st.warning(f"Mem0 fetch notice: {e}")
 
-    # 2. Build system instruction configuration
+    # 2. Build system instruction
     if memory_context:
         system_instruction = f"You are a helpful AI assistant. Relevant context about the user:\n{memory_context}"
     else:
@@ -71,23 +71,32 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
         system_instruction=system_instruction
     )
 
-    # 3. Call Gemini with active flash model
-    try:
-        response = genai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=config
-        )
-        bot_reply = response.text
-    except Exception as err:
-        st.error(f"Gemini API Error: {err}")
+    # 3. Model call with fallback list to prevent 404/deprecation errors
+    model_candidates = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-2.0-flash-exp"]
+    bot_reply = None
+    last_error = None
+
+    for model_name in model_candidates:
+        try:
+            res = genai_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
+            bot_reply = res.text
+            break
+        except Exception as err:
+            last_error = err
+
+    if not bot_reply:
+        st.error(f"Gemini API Error across models: {last_error}")
         st.stop()
 
     with st.chat_message("assistant"):
         st.markdown(bot_reply)
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
 
-    # 4. Save new user interaction to Mem0
+    # 4. Save interaction to Mem0
     try:
         mem0_client.add([{"role": "user", "content": prompt}], user_id=user_id)
     except Exception as err:
