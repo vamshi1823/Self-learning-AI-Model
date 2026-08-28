@@ -42,7 +42,7 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
     system_instruction = f"You are a helpful AI assistant. Relevant context about the user:\n{memory_context}"
     
     response = genai_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-1.5-flash",
         contents=prompt,
         config={"system_instruction": system_instruction}
     )
