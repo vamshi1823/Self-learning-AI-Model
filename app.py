@@ -5,10 +5,10 @@ from google.genai import types
 from dotenv import load_dotenv
 from mem0 import MemoryClient
 
-# Load environment variables (Local .env support)
+# Load environment variables (.env support for local execution)
 load_dotenv()
 
-# Safely fetch keys from Streamlit Secrets or OS Environment
+# Helper function to reliably fetch keys from Streamlit Secrets or environment variables
 def get_secret(key_name):
     if key_name in st.secrets:
         return st.secrets[key_name]
@@ -20,37 +20,33 @@ mem0_key = get_secret("MEM0_API_KEY")
 st.title("AI Self-Learning Assistant with Mem0")
 user_id = st.text_input("User ID", value="vamshi")
 
-# Validate API keys before running model code
-if not gemini_key:
-    st.error("GEMINI_API_KEY is missing! Please check Streamlit Secrets.")
+# Guard against missing keys
+if not gemini_key or not mem0_key:
+    st.error("Missing API Keys! Please check Streamlit Secrets or your .env file.")
     st.stop()
 
-if not mem0_key:
-    st.error("MEM0_API_KEY is missing! Please check Streamlit Secrets.")
-    st.stop()
-
-# Initialize API Clients
+# Initialize SDK Clients
 genai_client = genai.Client(api_key=gemini_key)
 mem0_client = MemoryClient(api_key=mem0_key)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
+# Display previous messages
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# User prompt
+# Chat input loop
 if prompt := st.chat_input("Ask something or tell me about yourself..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 1. Fetch relevant user memories from Mem0 safely
+    # 1. Fetch memories using correct dictionary filter syntax for Mem0
     memory_context = ""
     try:
-        memories = mem0_client.get_all(user_id=user_id)
+        memories = mem0_client.get_all(filters={"user_id": user_id})
         if isinstance(memories, list) and len(memories) > 0:
             memory_list = []
             for m in memories:
@@ -62,17 +58,17 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
     except Exception as e:
         st.warning(f"Mem0 fetch notice: {e}")
 
-    # 2. Build system instruction configuration
+    # 2. Configure system instruction
     system_instruction = f"You are a helpful AI assistant. Relevant context about the user:\n{memory_context}" if memory_context else "You are a helpful AI assistant."
     
     config = types.GenerateContentConfig(
         system_instruction=system_instruction
     )
 
-    # 3. Generate response with error catching
+    # 3. Call Gemini using current model identifier
     try:
         response = genai_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=config
         )
@@ -85,8 +81,8 @@ if prompt := st.chat_input("Ask something or tell me about yourself..."):
         st.markdown(bot_reply)
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
 
-    # 4. Save new interaction to Mem0 memory
+    # 4. Save new user interaction to Mem0 memory
     try:
         mem0_client.add([{"role": "user", "content": prompt}], user_id=user_id)
     except Exception as err:
-        st.warning(f"Could not save memory to Mem0: {err}")
+        st.warning(f"Mem0 save notice: {err}")
