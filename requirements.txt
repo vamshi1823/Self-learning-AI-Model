@@ -1,4 +1,4 @@
-echo google-genai > requirements.txt
-echo python-dotenv >> requirements.txt
-echo mem0ai >> requirements.txt
-echo streamlit >> requirements.txt
+google-genai
+python-dotenv
+mem0ai
+streamlit
